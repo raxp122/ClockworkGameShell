@@ -61,8 +61,22 @@ lanciato prima di ogni commit.
 
 - Python di sistema: **Python 2** con pygame 1.9. Il codice deve restare
   compatibile con Python 2 e 3.
-- Tasti visti da pygame: frecce = frecce, MENU = `Esc`, SELECT = `Space`,
-  START = `Enter`, A/B/X/Y = `K J I U` (layout SNES), Lightkey 1 = `H`,
-  Lightkey 5 = `L`. Le altre tre Lightkey vanno scoperte con KeyTester, che
-  le salva anche in `keylog.txt` nella sua cartella.
+- Mappa dei tasti vista da pygame (verificata con KeyTester):
+
+  | Tasto                  | Invia                 | Note |
+  |------------------------|-----------------------|------|
+  | Frecce                 | `Up Down Left Right`  | |
+  | A / B / X / Y          | `K` / `J` / `I` / `U` | layout SNES; con il layout Xbox A/B e X/Y si scambiano |
+  | MENU / SELECT / START  | `Esc` / `Space` / `Enter` | |
+  | SHIFT                  | niente                | modificatore hardware |
+  | Lightkey 1 (sinistra)  | `H`                   | uguale a SHIFT+B |
+  | Lightkey 2             | `Y`                   | uguale a SHIFT+Y |
+  | Lightkey 3 (centro)    | niente                | è un secondo SHIFT |
+  | Lightkey 4             | `O`                   | uguale a SHIFT+X |
+  | Lightkey 5 (destra)    | `L`                   | uguale a SHIFT+A |
+  | SHIFT+START / SELECT / MENU | `KP+` / `KP-` / `Backspace` | |
+
+  Un gioco quindi non distingue una Lightkey dalla combinazione SHIFT
+  equivalente, e non può leggere SHIFT o la Lightkey centrale da soli.
+  KeyTester salva i tasti premuti in `keylog.txt` nella sua cartella.
 - I giochi installati finiscono in `~/aria2download/raxp122/ClockworkGameShell/master/…`.
