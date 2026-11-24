@@ -73,19 +73,49 @@ def parse_chord(ch):
     return midi, iv
 
 
+class Timeline(object):
+    """Sixteenth position -> seconds, with tempo changes between sections."""
+    def __init__(self, changes):
+        self.segs, sec, last_pos, last_s16 = [], LEAD_IN, 0, None
+        for pos, bpm in changes:
+            if last_s16 is not None:
+                sec += (pos - last_pos) * last_s16
+            last_pos, last_s16 = pos, 60.0 / bpm / 4
+            self.segs.append((pos, sec, last_s16))
+
+    def _seg(self, p):
+        seg = self.segs[0]
+        for s in self.segs:
+            if s[0] <= p:
+                seg = s
+        return seg
+
+    def at(self, p):
+        pos, sec, s16 = self._seg(p)
+        return sec + (p - pos) * s16
+
+    def s16(self, p):
+        return self._seg(p)[2]
+
+
 def assemble(song):
-    melody, chords, pos = [], [], 0
+    """A section is (melody, chords) or (melody, chords, bpm)."""
+    bar = song.get("bar", BAR)
+    melody, chords, pos, changes = [], [], 0, []
     for sec in song["form"]:
-        seq, chord_str = song["sections"][sec]
+        seq, chord_str = song["sections"][sec][:2]
+        bpm = song["sections"][sec][2] if len(song["sections"][sec]) > 2 else song["bpm"]
+        if not changes or changes[-1][1] != bpm:
+            changes.append((pos, bpm))
         evs, length = parse_melody(seq)
         bars = chord_str.split()
-        if length != len(bars) * BAR:
+        if length != len(bars) * bar:
             raise ValueError("%s/%s: melody is %d sixteenths, chords cover %d"
-                             % (song["id"], sec, length, len(bars) * BAR))
+                             % (song["id"], sec, length, len(bars) * bar))
         melody += [(pos + s, l, m) for s, l, m in evs]
-        chords += [(pos + i * BAR, parse_chord(c)) for i, c in enumerate(bars)]
+        chords += [(pos + i * bar, parse_chord(c)) for i, c in enumerate(bars)]
         pos += length
-    return melody, chords, pos
+    return melody, chords, pos, Timeline(changes)
 
 
 # --------------------------------------------------------------------------
@@ -157,27 +187,34 @@ DRUMS = {
     "march": ([0, 4], [6], [0, 2, 4, 6]),
     "rag": ([0, 4], [2, 6], [1, 3, 5, 7]),
     "galop": ([0, 4], [2, 6], [0, 1, 2, 3, 4, 5, 6, 7]),
+    "waltz": ([0], [], [2, 4]),        # for 3/8 (bar of 6)
+    "none": ([], [], []),
 }
 
 
-def render(song, melody, chords, total16):
-    s16 = 60.0 / song["bpm"] / 4
-    length = LEAD_IN + total16 * s16 + TAIL
+def render(song, melody, chords, total16, tl):
+    length = tl.at(total16) + TAIL
     mx = Mixer(length)
-    at = lambda p: LEAD_IN + p * s16  # noqa: E731
+    at = tl.at
 
     # Melody (lead square) + quiet octave-down shadow for body
     for start, ln, midi in melody:
         if midi is None:
             continue
-        mx.tone(at(start), ln * s16, midi, song.get("lead", 0.25), duty=0.25)
-        mx.tone(at(start), ln * s16, midi - 12, 0.06, duty=0.5)
+        dur = at(start + ln) - at(start)
+        mx.tone(at(start), dur, midi, song.get("lead", 0.25), duty=0.25)
+        mx.tone(at(start), dur, midi - 12, 0.06, duty=0.5)
 
     # Bass + chords, one pattern per bar
     style = song["bass"]
+    bar = song.get("bar", BAR)
     for start, (root, iv) in chords:
+        s16 = tl.s16(start)
         third, fifth = root + iv[1], root + iv[2]
-        if style == "alberti":
+        if style == "root":     # one long note per bar
+            mx.tone(at(start), bar * s16, root + 12, 0.30, kind="triangle",
+                    decay=0.4, sustain=0.5)
+        elif style == "alberti":
             seq = [(0, root + 12), (2, fifth + 12), (4, third + 12), (6, fifth + 12)]
             for off, m in seq:
                 mx.tone(at(start + off), 2 * s16, m, 0.22, kind="triangle")
@@ -192,17 +229,17 @@ def render(song, melody, chords, total16):
 
     # Drums (skip during the count-in silence)
     kicks, snares, hats = DRUMS[song["drums"]]
-    for bar in range(0, total16, BAR):
+    for b in range(0, total16, bar):
         for o in kicks:
-            mx.kick(at(bar + o))
+            mx.kick(at(b + o))
         for o in snares:
-            mx.snare(at(bar + o))
+            mx.snare(at(b + o))
         for o in hats:
-            mx.hat(at(bar + o))
+            mx.hat(at(b + o))
 
     buf = mx.buf[:int(length * SR)]
     buf = buf / max(1e-9, np.max(np.abs(buf))) * 0.89
-    return buf, length, s16
+    return buf, length
 
 
 def encode_ogg(buf, path):
@@ -218,10 +255,10 @@ def main():
     os.makedirs(OUT, exist_ok=True)
     index = []
     for song in SONGS:
-        melody, chords, total16 = assemble(song)
-        buf, length, s16 = render(song, melody, chords, total16)
+        melody, chords, total16, tl = assemble(song)
+        buf, length = render(song, melody, chords, total16, tl)
         encode_ogg(buf, os.path.join(OUT, song["id"] + ".ogg"))
-        notes = [(LEAD_IN + start * s16, midi, start / 4.0)
+        notes = [(tl.at(start), midi, start / 4.0)
                  for start, _ln, midi in melody if midi is not None]
         charts = make_charts(notes)
         meta = {

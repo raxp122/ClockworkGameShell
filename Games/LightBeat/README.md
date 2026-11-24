@@ -35,11 +35,17 @@ nella cartella del gioco.
 
 Sono tutti arrangiamenti chiptune nostri di composizioni di pubblico dominio.
 
-| Brano | Compositore | Anno |
-|-------|-------------|------|
-| Rondo alla Turca | W. A. Mozart (1756–1791) | 1783 |
-| The Entertainer | Scott Joplin (1868–1917) | 1902 |
-| Galop Infernal (Can-can) | J. Offenbach (1819–1880) | 1858 |
+In ordine di difficoltà:
+
+| Brano | Compositore | Anno | Note |
+|-------|-------------|------|------|
+| Für Elise (Per Elisa) | L. van Beethoven (1770–1827) | ~1810 | Lento, in 3/8 |
+| Rondo alla Turca | W. A. Mozart (1756–1791) | 1783 | |
+| The Entertainer | Scott Joplin (1868–1917) | 1902 | Ragtime |
+| William Tell Overture (finale) | G. Rossini (1792–1868) | 1829 | Galoppo in sedicesimi |
+| Galop Infernal (Can-can) | J. Offenbach (1819–1880) | 1858 | |
+| Hall of the Mountain King | E. Grieg (1843–1907) | 1876 | Accelera a ogni giro, da 104 a 184 BPM |
+| Flight of the Bumblebee | N. Rimsky-Korsakov (1844–1908) | 1900 | Il livello "impossibile" |
 
 ## Usare i tuoi file MIDI
 
@@ -68,6 +74,8 @@ alla repo MIDI di brani protetti da copyright**.
 1. In `tools/songs.py` scrivi melodia e accordi, seguendo gli esempi già
    presenti. La notazione è `Nota+Ottava.durata`, con la durata in sedicesimi:
    per esempio `C#5.2` è un ottavo e `r.4` una pausa da un quarto.
+   Una sezione può avere un terzo valore con il proprio BPM, per i cambi di
+   tempo, e un brano può avere `"bar": 6` per le battute in 3/8.
 2. Genera audio e note da suonare:
    ```bash
    python3 Games/LightBeat/tools/make_songs.py
