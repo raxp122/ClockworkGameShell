@@ -14,8 +14,9 @@ tool installabili direttamente dal menu **Warehouse** della console. La struttur
    download è finito, premi **A** di nuovo per avviarlo.
 
 > ⚠️ Il launcher legge **sempre il branch `master`**: l'URL `master/index.json`
-> è scritto nel codice del launcher. Per questo il branch principale di questa
-> repo deve chiamarsi `master`.
+> è scritto nel codice del launcher. Le modifiche entrano in `main` tramite
+> PR, e subito dopo `main` viene unito in `master`, che è quello che il
+> GameShell scarica.
 
 ## Contenuto
 

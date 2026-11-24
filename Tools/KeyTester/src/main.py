@@ -58,10 +58,10 @@ KNOWN = {
 
 # On-screen button widgets: name -> (rect, keys that light it)
 BUTTONS = [
-    # Lightkey bar (back side). LK3 is SHIFT: it never lights here.
+    # Lightkey bar (back side). The centre key (LK3) is a hardware SHIFT
+    # that sends nothing, so its slot is left empty.
     ("LK1 h", (8, 30, 56, 18), [pygame.K_h]),
     ("LK2 y", (70, 30, 56, 18), [pygame.K_y]),
-    ("LK3 sh", (132, 30, 56, 18), []),
     ("LK4 o", (194, 30, 56, 18), [pygame.K_o]),
     ("LK5 l", (256, 30, 56, 18), [pygame.K_l]),
     # D-pad
@@ -74,12 +74,10 @@ BUTTONS = [
     ("K", (262, 84, 22, 22), [pygame.K_k]),
     ("U", (218, 84, 22, 22), [pygame.K_u]),
     ("J", (240, 106, 22, 22), [pygame.K_j]),
-    # Middle row (SHIFT is a hardware modifier: it sends no key itself)
-    # SHIFT can only be seen through the combos that send a unique key
-    # (Sh+Start, Sh+Select, Sh+Menu): those light SHIFT and the button.
-    ("MENU", (100, 66, 52, 16), [pygame.K_ESCAPE, pygame.K_BACKSPACE]),
-    ("SHIFT", (160, 66, 52, 16),
-     [pygame.K_KP_PLUS, pygame.K_KP_MINUS, pygame.K_BACKSPACE]),
+    # Middle row. SHIFT is not shown: it is a hardware modifier that never
+    # sends a key. Sh+Menu/Select/Start send unique keys, which light the
+    # button they were combined with.
+    ("MENU", (130, 66, 52, 16), [pygame.K_ESCAPE, pygame.K_BACKSPACE]),
     ("SELECT", (100, 104, 52, 16), [pygame.K_SPACE, pygame.K_KP_MINUS]),
     ("START", (160, 104, 52, 16), [pygame.K_RETURN, pygame.K_KP_PLUS]),
 ]
