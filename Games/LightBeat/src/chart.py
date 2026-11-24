@@ -11,7 +11,7 @@ from __future__ import division
 DIFFICULTY = [
     ("easy", 1.0, 0.38),
     ("normal", 0.5, 0.19),
-    ("hard", 0.0, 0.10),
+    ("hard", 0.0, 0.095),
 ]
 GRID_TOLERANCE = 0.08   # beats: how far from the grid a note may start
 CHORD_WINDOW = 0.03     # seconds: notes this close are one chord (keep the top)
