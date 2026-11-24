@@ -3,3 +3,5 @@ __pycache__/
 keylog.txt
 .DS_Store
 ._*
+settings.json
+scores.json

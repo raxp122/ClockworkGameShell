@@ -22,6 +22,7 @@ tool installabili direttamente dal menu **Warehouse** della console. La struttur
 
 | Categoria | Titolo    | Tipo     | Descrizione |
 |-----------|-----------|----------|-------------|
+| Games     | LightBeat | launcher | Rhythm game a 4 corsie, da suonare con la Lightkey, le frecce o A/B/X/Y. Musica chiptune di brani di pubblico dominio. |
 | Tools     | KeyTester | launcher | Mostra tutti i tasti premuti, compresa la Lightkey sul retro. Per uscire tieni premuto MENU. |
 
 ## Struttura

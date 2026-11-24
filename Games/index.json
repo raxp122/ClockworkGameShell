@@ -1,0 +1,10 @@
+{
+ "list": [
+  {
+   "type": "launcher",
+   "title": "LightBeat",
+   "file": "https://raw.githubusercontent.com/raxp122/ClockworkGameShell/master/Games/LightBeat/file/LightBeat.tar.gz",
+   "shots": "https://raw.githubusercontent.com/raxp122/ClockworkGameShell/master/Games/LightBeat/shots/LightBeat.png"
+  }
+ ]
+}
