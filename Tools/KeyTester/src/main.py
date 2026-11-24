@@ -75,10 +75,13 @@ BUTTONS = [
     ("U", (218, 84, 22, 22), [pygame.K_u]),
     ("J", (240, 106, 22, 22), [pygame.K_j]),
     # Middle row (SHIFT is a hardware modifier: it sends no key itself)
-    ("MENU", (100, 66, 52, 16), [pygame.K_ESCAPE]),
-    ("SHIFT", (160, 66, 52, 16), []),
-    ("SELECT", (100, 104, 52, 16), [pygame.K_SPACE]),
-    ("START", (160, 104, 52, 16), [pygame.K_RETURN]),
+    # SHIFT can only be seen through the combos that send a unique key
+    # (Sh+Start, Sh+Select, Sh+Menu): those light SHIFT and the button.
+    ("MENU", (100, 66, 52, 16), [pygame.K_ESCAPE, pygame.K_BACKSPACE]),
+    ("SHIFT", (160, 66, 52, 16),
+     [pygame.K_KP_PLUS, pygame.K_KP_MINUS, pygame.K_BACKSPACE]),
+    ("SELECT", (100, 104, 52, 16), [pygame.K_SPACE, pygame.K_KP_MINUS]),
+    ("START", (160, 104, 52, 16), [pygame.K_RETURN, pygame.K_KP_PLUS]),
 ]
 
 
