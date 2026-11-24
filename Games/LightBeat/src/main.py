@@ -17,12 +17,23 @@ import sys
 
 import pygame
 
+from midi import load_midi_song, set_part
+from sequencer import Sequencer, Synth
+
 W, H = 320, 240
 HERE = os.path.dirname(os.path.abspath(__file__))
 SONG_DIR = os.path.join(HERE, "songs")
 SETTINGS_FILE = os.path.join(HERE, "settings.json")
 SCORES_FILE = os.path.join(HERE, "scores.json")
 BUTTONS_LAYOUT_FILE = "/home/cpi/launcher/.buttonslayout"
+# Put your own .mid files here (the first folder is created automatically)
+if os.environ.get("LIGHTBEAT_MIDI_DIR"):
+    MIDI_DIRS = [os.environ["LIGHTBEAT_MIDI_DIR"]]
+else:
+    MIDI_DIRS = [os.path.expanduser("~/games/LightBeat/midi"), os.path.join(HERE, "midi")]
+# Same volume steps as the GameShell launcher (sys.py/UI/above_all_patch.py)
+VOL_SEGS = [(0, 20), (21, 40), (41, 50), (51, 60), (61, 70), (71, 85), (86, 90),
+            (91, 95), (96, 100)]
 
 DIFFS = ["easy", "normal", "hard"]
 SPEEDS = [2.2, 1.9, 1.6, 1.35, 1.1]          # seconds a note takes to fall
@@ -90,7 +101,30 @@ def load_songs():
         s = load_json(os.path.join(SONG_DIR, sid + ".json"), None)
         if s:
             songs.append(s)
-    return songs
+    return songs + find_midi_files()
+
+
+def find_midi_files():
+    """Placeholders for user MIDI files; parsed when first selected."""
+    try:
+        if not os.path.isdir(MIDI_DIRS[0]):
+            os.makedirs(MIDI_DIRS[0])
+    except OSError:
+        pass
+    found, seen = [], set()
+    for d in MIDI_DIRS:
+        try:
+            names = sorted(os.listdir(d))
+        except OSError:
+            continue
+        for name in names:
+            if name.lower().endswith((".mid", ".midi")) and name not in seen:
+                seen.add(name)
+                found.append({"id": "midi:" + name, "kind": "midi", "stub": True,
+                              "path": os.path.join(d, name),
+                              "title": os.path.splitext(name)[0].replace("_", " "),
+                              "composer": "MIDI file", "year": None})
+    return found
 
 
 # Clock ------------------------------------------------------------------
@@ -129,15 +163,85 @@ class Audio(object):
 
     def stop(self):
         if self.ok:
+            pygame.mixer.unpause()
+            pygame.mixer.music.unpause()
             pygame.mixer.music.stop()
+            pygame.mixer.stop()
 
     def pause(self):
         if self.ok:
             pygame.mixer.music.pause()
+            pygame.mixer.pause()
 
     def resume(self):
         if self.ok:
             pygame.mixer.music.unpause()
+            pygame.mixer.unpause()
+
+    def set_music_volume(self, v):
+        if self.ok:
+            pygame.mixer.music.set_volume(v)
+
+
+class Volume(object):
+    """SHIFT+START / SHIFT+SELECT. Uses the system (ALSA) volume like the
+    launcher does; falls back to the game's own volume on a PC."""
+    def __init__(self, game):
+        self.game = game
+        self.soft = 1.0
+        self.shown_at = -9.0
+        try:
+            import alsaaudio
+            self.mixer = alsaaudio.Mixer()
+            self.mixer.getvolume()
+        except Exception:
+            self.mixer = None
+
+    def level(self):
+        if self.mixer:
+            try:
+                return int(self.mixer.getvolume()[0])
+            except Exception:
+                self.mixer = None
+        return int(round(self.soft * 100))
+
+    def soft_level(self):
+        return 1.0 if self.mixer else self.soft
+
+    def change(self, d):
+        if self.mixer:
+            vol, idx = self.level(), 0
+            for i, (lo, hi) in enumerate(VOL_SEGS):
+                if lo <= vol <= hi:
+                    idx = i
+            idx = max(0, min(len(VOL_SEGS) - 1, idx + d))
+            lo, hi = VOL_SEGS[idx]
+            try:
+                self.mixer.setvolume(int((lo + hi) // 2 if d > 0 else lo))
+            except Exception:
+                self.mixer = None
+        if not self.mixer:
+            self.soft = max(0.0, min(1.0, round(self.soft + 0.1 * d, 1)))
+            self.game.audio.set_music_volume(self.soft)
+            seq = getattr(self.game.scene, "seq", None)
+            if seq:
+                seq.set_volume(self.soft)
+        self.shown_at = self.game.clock.now()
+
+    def draw(self, s):
+        if self.game.clock.now() - self.shown_at > 1.2:
+            return
+        lvl = self.level()
+        box = pygame.Rect(W // 2 - 70, 8, 140, 26)
+        pygame.draw.rect(s, PANEL, box)
+        pygame.draw.rect(s, GOLD, box, 1)
+        self.game.fonts.draw(s, "VOL", 16, TEXT, (box.x + 8, box.y + 7))
+        n = len(VOL_SEGS)
+        on = sum(1 for lo, _hi in VOL_SEGS if lvl > lo) if lvl else 0
+        for i in range(n):
+            x = box.x + 38 + i * 10
+            col = GOLD if i < on else LINE
+            pygame.draw.rect(s, col, (x, box.y + 18 - i, 7, 4 + i))
 
 
 # Text helper ------------------------------------------------------------
@@ -244,24 +348,36 @@ class Title(Scene):
 
 
 class SongSelect(Scene):
+    ROWS = 3
+
     def __init__(self, game):
         Scene.__init__(self, game)
-        self.sel = game.last_song
+        self.sel = min(game.last_song, len(game.songs) - 1)
         self.diff = game.last_diff
+        game.load_song(self.sel)
+
+    def move(self, d):
+        self.sel = (self.sel + d) % len(self.game.songs)
+        self.game.load_song(self.sel)
 
     def key(self, key):
-        n = len(self.game.songs)
+        song = self.game.songs[self.sel]
         if key == K.K_UP:
-            self.sel = (self.sel - 1) % n
+            self.move(-1)
         elif key == K.K_DOWN:
-            self.sel = (self.sel + 1) % n
+            self.move(1)
         elif key == K.K_LEFT:
             self.diff = max(0, self.diff - 1)
         elif key == K.K_RIGHT:
             self.diff = min(len(DIFFS) - 1, self.diff + 1)
+        elif key == K.K_SPACE and len(song.get("parts", [])) > 1:
+            set_part(song, song["part"] + 1)
         elif key in CONFIRM:
+            if not song.get("charts") or not song["charts"][DIFFS[self.diff]]:
+                return
             self.game.last_song, self.game.last_diff = self.sel, self.diff
-            self.game.go(Play(self.game, self.game.songs[self.sel], DIFFS[self.diff]))
+            self.game.show_message("Loading...")
+            self.game.go(Play(self.game, song, DIFFS[self.diff]))
         elif key in BACK:
             self.game.go(Title(self.game))
 
@@ -269,32 +385,43 @@ class SongSelect(Scene):
         g = self.game
         s.fill(BG)
         g.fonts.draw(s, "SELECT SONG", 22, GOLD, (8, 6))
-        for i, song in enumerate(g.songs):
-            y = 30 + i * 34
+        n = len(g.songs)
+        g.fonts.draw(s, "%d/%d" % (self.sel + 1, n), 16, DIM, (312, 9), "right")
+        first = max(0, min(self.sel - 1, n - self.ROWS))
+        for i in range(first, min(n, first + self.ROWS)):
+            song = g.songs[i]
+            y = 30 + (i - first) * 34
             on = i == self.sel
             pygame.draw.rect(s, PANEL if on else BG, (6, y, 308, 30))
             if on:
                 pygame.draw.rect(s, GOLD, (6, y, 308, 30), 1)
-            g.fonts.draw(s, song["title"], 19, TEXT if on else DIM, (12, y + 3))
-            g.fonts.draw(s, "%s, %d" % (song["composer"], song["year"]), 15, DIM,
-                         (12, y + 17))
+            g.fonts.draw(s, song["title"][:30], 19, TEXT if on else DIM, (12, y + 3))
+            sub = song["composer"] + (", %d" % song["year"] if song.get("year") else "")
+            g.fonts.draw(s, sub, 15, DIM, (12, y + 17))
             best = g.scores.get("%s/%s" % (song["id"], DIFFS[self.diff]))
             if best:
                 g.fonts.draw(s, best["grade"], 26, GOLD, (306, y + 5), "right")
+        if first > 0:
+            g.fonts.draw(s, "^", 16, DIM, (300, 22))
+        if first + self.ROWS < n:
+            g.fonts.draw(s, "v", 16, DIM, (300, 128))
 
         song = g.songs[self.sel]
         diff = DIFFS[self.diff]
-        y = 30 + len(g.songs) * 34 + 6
+        y = 30 + self.ROWS * 34 + 6
         pygame.draw.line(s, LINE, (6, y), (314, y))
-        # Difficulty selector
+        if song.get("error"):
+            g.fonts.draw(s, "Can't read this MIDI file:", 17, RED, (12, y + 10))
+            g.fonts.draw(s, song["error"][:44], 15, DIM, (12, y + 28))
+            draw_footer(g, s, "Up/Down: song    B: back")
+            return
         for i, d in enumerate(DIFFS):
             x = 12 + i * 70
             on = i == self.diff
             col = (GREEN, GOLD, RED)[i]
             pygame.draw.rect(s, col if on else PANEL, (x, y + 8, 64, 18))
             g.fonts.draw(s, d.upper(), 16, BG if on else DIM, (x + 32, y + 11), "center")
-        n_notes = len(song["charts"][diff])
-        g.fonts.draw(s, "%d notes" % n_notes, 16, TEXT, (306, y + 6), "right")
+        g.fonts.draw(s, "%d notes" % len(song["charts"][diff]), 16, TEXT, (306, y + 6), "right")
         g.fonts.draw(s, "%d BPM  %ds" % (song["bpm"], int(song["length"])), 15, DIM,
                      (306, y + 19), "right")
         best = g.scores.get("%s/%s" % (song["id"], diff))
@@ -304,6 +431,11 @@ class SongSelect(Scene):
                 16, TEXT, (12, y + 32))
         else:
             g.fonts.draw(s, "Not played yet", 16, DIM, (12, y + 32))
+        if song.get("parts"):
+            part = song["parts"][song["part"]]
+            more = "  (SELECT: change)" if len(song["parts"]) > 1 else ""
+            g.fonts.draw(s, "Lanes play: %s%s" % (part["name"][:20], more), 15, DIM,
+                         (12, y + 50))
         draw_footer(g, s, "Up/Down: song   Left/Right: level   A: play")
 
 
@@ -384,9 +516,16 @@ class Play(Scene):
 
     # timing --------------------------------------------------------------
     def start(self):
-        self.t0 = self.last_frame = self.game.clock.now()
+        g = self.game
+        g.audio.stop()
+        self.seq = None
+        if self.song.get("kind") == "midi":
+            self.seq = Sequencer(g.synth, self.song, g.volume.soft_level())
+        else:
+            g.audio.play(os.path.join(SONG_DIR, self.song["audio"]))
+            g.audio.set_music_volume(g.volume.soft_level())
+        self.t0 = self.last_frame = g.clock.now()
         self.pause_t = None
-        self.game.audio.play(os.path.join(SONG_DIR, self.song["audio"]))
 
     def song_time(self):
         now = self.pause_t if self.paused else self.game.clock.now()
@@ -471,6 +610,8 @@ class Play(Scene):
         now = self.game.clock.now()
         dt = min(0.1, now - self.last_frame)
         self.last_frame = now
+        if self.seq:
+            self.seq.update(t + self.offset)   # audio runs on the raw clock
         self.flash = [max(0.0, f - dt) for f in self.flash]
         self.judge = (self.judge[0], max(0.0, self.judge[1] - dt))
 
@@ -630,6 +771,8 @@ class Game(object):
         self.clock = Clock(simulated)
         self.fonts = Fonts()
         self.audio = Audio()
+        self.synth = Synth()
+        self.volume = Volume(self)
         self.songs = load_songs()
         self.settings = {"offset_ms": 0, "speed": 2}
         self.settings.update(load_json(SETTINGS_FILE, {}))
@@ -643,17 +786,39 @@ class Game(object):
     def go(self, scene):
         self.scene = scene
 
+    def load_song(self, index):
+        """Parse a MIDI placeholder the first time it is selected."""
+        song = self.songs[index]
+        if not song.get("stub") or song.get("error"):
+            return
+        self.show_message("Reading MIDI...")
+        try:
+            self.songs[index] = load_midi_song(song["path"])
+        except Exception as e:  # any broken file must not crash the game
+            song["error"] = str(e) or e.__class__.__name__
+
+    def show_message(self, text):
+        self.screen.fill(BG)
+        self.fonts.draw(self.screen, text, 24, TEXT, (W // 2, H // 2 - 10), "center")
+        pygame.display.flip()
+
     def handle(self, ev):
         if ev.type == pygame.QUIT:
             self.running = False
         elif ev.type == pygame.KEYDOWN:
-            self.scene.key(ev.key)
+            if ev.key == K.K_KP_PLUS:          # SHIFT + START
+                self.volume.change(1)
+            elif ev.key == K.K_KP_MINUS:       # SHIFT + SELECT
+                self.volume.change(-1)
+            else:
+                self.scene.key(ev.key)
         elif ev.type == pygame.KEYUP:
             self.scene.keyup(ev.key)
 
     def frame(self):
         self.scene.update()
         self.scene.draw(self.screen)
+        self.volume.draw(self.screen)
 
 
 def press(game, key):
@@ -673,7 +838,10 @@ def run_test(screen, shot_prefix):
     press(game, CONFIRM[0])
     game.frame()
     save("select")
-    for si, song in enumerate(game.songs):
+    for si in range(len(game.songs)):
+        game.load_song(si)
+        song = game.songs[si]
+        assert not song.get("error"), (song["id"], song.get("error"))
         for diff in DIFFS:
             game.go(Play(game, song, diff))
             shot_at = song["charts"][diff][len(song["charts"][diff]) // 3][0] - 0.05

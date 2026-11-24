@@ -17,7 +17,9 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.join(os.path.dirname(HERE), "src"))
 from songs import SONGS  # noqa: E402
+from chart import make_charts  # noqa: E402  (shared with the game)
 
 OUT = os.path.join(os.path.dirname(HERE), "src", "songs")
 SR = 44100
@@ -26,13 +28,6 @@ TAIL = 2.0
 BAR = 8           # sixteenths per bar (2/4)
 
 NOTE_BASE = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
-
-# Difficulty: (grid in sixteenths a note must start on, min seconds between notes)
-DIFFICULTY = {
-    "easy": (4, 0.38),
-    "normal": (2, 0.19),
-    "hard": (1, 0.10),
-}
 
 
 # --------------------------------------------------------------------------
@@ -219,38 +214,6 @@ def encode_ogg(buf, path):
     subprocess.run(cmd, input=pcm, check=True)
 
 
-# --------------------------------------------------------------------------
-# Charts
-# --------------------------------------------------------------------------
-def make_chart(melody, s16, grid, min_gap):
-    notes, last_t = [], -9.0
-    for start, _ln, midi in melody:
-        if midi is None or start % grid:
-            continue
-        t = LEAD_IN + start * s16
-        if t - last_t < min_gap - 1e-6:
-            continue
-        notes.append((t, midi))
-        last_t = t
-
-    # Lanes follow the melody's contour inside a small window
-    lanes, prev_lane, prev_pitch = [], 1, None
-    for i, (_t, p) in enumerate(notes):
-        win = [q for _, q in notes[max(0, i - 3):i + 4]]
-        lo, hi = min(win), max(win)
-        lane = prev_lane if hi == lo else int(round((p - lo) / float(hi - lo) * 3))
-        if prev_pitch is not None:
-            if p == prev_pitch:
-                lane = prev_lane
-            elif lane == prev_lane:  # pitch moved: move the lane the same way
-                lane = min(3, lane + 1) if p > prev_pitch else max(0, lane - 1)
-                if lane == prev_lane:
-                    lane = prev_lane - 1 if p > prev_pitch else prev_lane + 1
-        lanes.append(lane)
-        prev_lane, prev_pitch = lane, p
-    return [[round(t, 4), l] for (t, _), l in zip(notes, lanes)]
-
-
 def main():
     os.makedirs(OUT, exist_ok=True)
     index = []
@@ -258,8 +221,9 @@ def main():
         melody, chords, total16 = assemble(song)
         buf, length, s16 = render(song, melody, chords, total16)
         encode_ogg(buf, os.path.join(OUT, song["id"] + ".ogg"))
-        charts = {d: make_chart(melody, s16, g, gap)
-                  for d, (g, gap) in DIFFICULTY.items()}
+        notes = [(LEAD_IN + start * s16, midi, start / 4.0)
+                 for start, _ln, midi in melody if midi is not None]
+        charts = make_charts(notes)
         meta = {
             "id": song["id"], "title": song["title"], "composer": song["composer"],
             "year": song["year"], "bpm": song["bpm"], "length": round(length, 3),
