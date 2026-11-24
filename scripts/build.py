@@ -65,7 +65,7 @@ def pack(src_dir, title, out_path):
             dirnames[:] = sorted(d for d in dirnames
                                  if d != "__pycache__" and not d.startswith("."))
             for name in sorted(dirnames) + sorted(filenames):
-                if name.startswith("._") or name in (".DS_Store", "keylog.txt", "settings.json", "scores.json") \
+                if name.startswith("._") or name in (".DS_Store", "keylog.txt", "settings.json", "scores.json", "error.log") \
                         or name.endswith(".pyc"):
                     continue
                 full = os.path.join(dirpath, name)
