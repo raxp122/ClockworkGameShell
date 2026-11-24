@@ -82,3 +82,8 @@ lanciato prima di ogni commit.
   equivalente, e non può leggere SHIFT o la Lightkey centrale da soli.
   KeyTester salva i tasti premuti in `keylog.txt` nella sua cartella.
 - I giochi installati finiscono in `~/aria2download/raxp122/ClockworkGameShell/master/…`.
+
+## Supporta il progetto
+
+Se ti piacciono questi giochi, puoi offrirmi un caffè su
+[Ko-fi](https://ko-fi.com/raxp122) ☕
