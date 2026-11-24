@@ -25,6 +25,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SONG_DIR = os.path.join(HERE, "songs")
 SETTINGS_FILE = os.path.join(HERE, "settings.json")
 SCORES_FILE = os.path.join(HERE, "scores.json")
+ERROR_LOG = os.path.join(HERE, "error.log")
 BUTTONS_LAYOUT_FILE = "/home/cpi/launcher/.buttonslayout"
 # Put your own .mid files here (the first folder is created automatically)
 if os.environ.get("LIGHTBEAT_MIDI_DIR"):
@@ -79,6 +80,21 @@ CONFIRM, BACK = confirm_back_keys()
 
 
 # Persistence ------------------------------------------------------------
+def log_error(where):
+    """Append the current exception's traceback to error.log."""
+    import time
+    import traceback
+    try:
+        with open(ERROR_LOG, "a") as f:
+            f.write("=== %s  %s\n" % (time.strftime("%Y-%m-%d %H:%M:%S"), where))
+            f.write("python %s, pygame %s\n" % (sys.version.split()[0],
+                                                 getattr(pygame, "ver", "?")))
+            traceback.print_exc(file=f)
+    except (IOError, OSError):
+        pass
+    traceback.print_exc()
+
+
 def load_json(path, default):
     try:
         with open(path) as f:
@@ -377,7 +393,15 @@ class SongSelect(Scene):
                 return
             self.game.last_song, self.game.last_diff = self.sel, self.diff
             self.game.show_message("Loading...")
-            self.game.go(Play(self.game, song, DIFFS[self.diff]))
+            try:
+                play = Play(self.game, song, DIFFS[self.diff])
+            except Exception as e:  # never crash on one bad song
+                log_error("starting %s" % song["id"])
+                self.game.audio.stop()
+                song["error"] = "can't play it: %s (see error.log)" % (
+                    str(e) or e.__class__.__name__)
+                return
+            self.game.go(play)
         elif key in BACK:
             self.game.go(Title(self.game))
 
@@ -795,6 +819,7 @@ class Game(object):
         try:
             self.songs[index] = load_midi_song(song["path"])
         except Exception as e:  # any broken file must not crash the game
+            log_error("reading %s" % song["path"])
             song["error"] = str(e) or e.__class__.__name__
 
     def show_message(self, text):
@@ -886,12 +911,26 @@ def main():
         print("No songs found in", SONG_DIR)
         return 1
     tick = pygame.time.Clock()
-    while game.running:
-        for ev in pygame.event.get():
-            game.handle(ev)
-        game.frame()
-        pygame.display.flip()
-        tick.tick(60)
+    try:
+        while game.running:
+            for ev in pygame.event.get():
+                game.handle(ev)
+            game.frame()
+            pygame.display.flip()
+            tick.tick(60)
+    except Exception:
+        log_error("main loop")
+        try:
+            game.audio.stop()
+            game.show_message("LightBeat crashed")
+            game.fonts.draw(screen, "Details saved to error.log", 16, DIM,
+                            (W // 2, H // 2 + 20), "center")
+            pygame.display.flip()
+            pygame.time.wait(3000)
+        except Exception:
+            pass
+        pygame.quit()
+        return 1
     game.audio.stop()
     pygame.quit()
     return 0

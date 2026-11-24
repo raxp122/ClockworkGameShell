@@ -9,8 +9,13 @@ enough for the GameShell. Pure Python, Python 2 and 3.
 from __future__ import division
 
 import heapq
+import io
 import math
+import os
 import random
+import sys
+import tempfile
+import wave
 from array import array
 
 import pygame
@@ -32,24 +37,41 @@ class Synth(object):
         self.ok = bool(init)
         if not self.ok:
             return
-        self.rate, size, self.stereo = init[0], init[1], init[2] >= 2
-        self.ok = abs(size) == 16
+        self.rate = init[0]
         self.cache = {}
         self.rng = random.Random(1)
         pygame.mixer.set_num_channels(NUM_CHANNELS)
 
     def _sound(self, samples):
-        arr = array("h")
-        for v in samples:
-            s = int(v * 32000)
-            arr.append(s)
-            if self.stereo:
-                arr.append(s)
-        data = _to_bytes(arr)
+        """Build a Sound from a mono 16-bit WAV made in memory. Loading a WAV
+        works on every pygame version (pygame 1.9 on the GameShell has no
+        reliable way to build a Sound from raw bytes) and SDL converts it to
+        the mixer's format."""
+        arr = array("h", [int(v * 32000) for v in samples])
+        if sys.byteorder == "big":
+            arr.byteswap()
+        buf = io.BytesIO()
+        w = wave.open(buf, "wb")
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(self.rate)
+        w.writeframes(_to_bytes(arr))
+        w.close()
+        data = buf.getvalue()
         try:
-            return pygame.mixer.Sound(buffer=data)
-        except TypeError:          # very old pygame
-            return pygame.mixer.Sound(data)
+            return pygame.mixer.Sound(io.BytesIO(data))
+        except Exception:
+            # Last resort: some builds only load sounds from a real file
+            fd, path = tempfile.mkstemp(suffix=".wav")
+            try:
+                os.write(fd, data)
+                os.close(fd)
+                return pygame.mixer.Sound(path)
+            finally:
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
 
     def tone(self, wave, pitch):
         key = (wave, pitch)
