@@ -15,7 +15,9 @@ vanno premute quando toccano la linea in basso.
 | 4      | LK5      | Destra   | A             |
 
 Il tasto centrale della Lightkey (LK3) è uno SHIFT hardware, quindi non viene
-usato. MENU mette in pausa. Nei menu, A conferma e B torna indietro, secondo
+usato. MENU mette in pausa. **SHIFT+START** e **SHIFT+SELECT** alzano e
+abbassano il volume anche durante il gioco: è il volume di sistema, lo stesso
+del launcher. Nei menu, A conferma e B torna indietro, secondo
 il layout dei tasti scelto nelle impostazioni del GameShell.
 
 ## Punteggio
@@ -39,7 +41,29 @@ Sono tutti arrangiamenti chiptune nostri di composizioni di pubblico dominio.
 | The Entertainer | Scott Joplin (1868–1917) | 1902 |
 | Galop Infernal (Can-can) | J. Offenbach (1819–1880) | 1858 |
 
-## Aggiungere un brano
+## Usare i tuoi file MIDI
+
+LightBeat può suonare qualsiasi file MIDI (`.mid`, `.midi`):
+
+1. Copia i file in **`~/games/LightBeat/midi/`** sul GameShell. La cartella
+   viene creata al primo avvio del gioco. Per copiarli puoi usare SCP/SFTP
+   (utente `cpi`) o l'app TinyCloud.
+2. Riapri LightBeat: i file compaiono in fondo alla lista dei brani.
+3. Il gioco sceglie da solo la parte melodica da suonare sulle corsie. Se ha
+   scelto lo strumento sbagliato, premi **SELECT** nella schermata dei brani
+   per passare alla parte successiva. Le note per Easy, Normal e Hard vengono
+   rigenerate al volo.
+
+La musica viene suonata in tempo reale con suoni chiptune: la parte scelta
+come melodia usa un'onda quadra, le parti gravi un'onda triangolare, il
+canale 10 la batteria. Funzionano i formati MIDI 0 e 1, con cambi di tempo.
+
+Nella repo c'è un solo MIDI di esempio, `src/midi/Ode_to_Joy.mid` (Beethoven,
+pubblico dominio), generato da `tools/make_example_midi.py`. Ogni utente è
+responsabile dei file che carica sul proprio dispositivo: **non aggiungere
+alla repo MIDI di brani protetti da copyright**.
+
+## Aggiungere un brano integrato
 
 1. In `tools/songs.py` scrivi melodia e accordi, seguendo gli esempi già
    presenti. La notazione è `Nota+Ottava.durata`, con la durata in sedicesimi:
