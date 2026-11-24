@@ -43,19 +43,27 @@ KNOWN = {
     pygame.K_i: "Y/X (I)",
     pygame.K_j: "B/A (J)",
     pygame.K_k: "A/B (K)",
-    pygame.K_h: "LK1",
-    pygame.K_l: "LK5",
+    # Back Lightkey bar (verified on a real GameShell). The centre key
+    # (LK3) is a second hardware SHIFT and sends nothing by itself.
+    # The same letters are also sent by SHIFT + a face button.
+    pygame.K_h: "LK1|Sh+B",
+    pygame.K_y: "LK2|Sh+Y",
+    pygame.K_o: "LK4|Sh+X",
+    pygame.K_l: "LK5|Sh+A",
+    # Other SHIFT combos
+    pygame.K_KP_PLUS: "Sh+Start",
+    pygame.K_KP_MINUS: "Sh+Select",
+    pygame.K_BACKSPACE: "Sh+Menu",
 }
 
 # On-screen button widgets: name -> (rect, keys that light it)
 BUTTONS = [
-    # Lightkey bar (back side). Only LK1/LK5 are documented; the middle
-    # three light up with whatever key they send (see "learned" below).
-    ("LK1", (8, 30, 56, 18), [pygame.K_h]),
-    ("LK2", (70, 30, 56, 18), []),
-    ("LK3", (132, 30, 56, 18), []),
-    ("LK4", (194, 30, 56, 18), []),
-    ("LK5", (256, 30, 56, 18), [pygame.K_l]),
+    # Lightkey bar (back side). The centre key (LK3) is a hardware SHIFT
+    # that sends nothing, so its slot is left empty.
+    ("LK1 h", (8, 30, 56, 18), [pygame.K_h]),
+    ("LK2 y", (70, 30, 56, 18), [pygame.K_y]),
+    ("LK4 o", (194, 30, 56, 18), [pygame.K_o]),
+    ("LK5 l", (256, 30, 56, 18), [pygame.K_l]),
     # D-pad
     ("^", (40, 62, 22, 22), [pygame.K_UP]),
     ("v", (40, 106, 22, 22), [pygame.K_DOWN]),
@@ -66,11 +74,12 @@ BUTTONS = [
     ("K", (262, 84, 22, 22), [pygame.K_k]),
     ("U", (218, 84, 22, 22), [pygame.K_u]),
     ("J", (240, 106, 22, 22), [pygame.K_j]),
-    # Middle row
-    ("MENU", (100, 66, 52, 16), [pygame.K_ESCAPE]),
-    ("SHIFT", (160, 66, 52, 16), [pygame.K_LSHIFT, pygame.K_RSHIFT]),
-    ("SELECT", (100, 104, 52, 16), [pygame.K_SPACE]),
-    ("START", (160, 104, 52, 16), [pygame.K_RETURN]),
+    # Middle row. SHIFT is not shown: it is a hardware modifier that never
+    # sends a key. Sh+Menu/Select/Start send unique keys, which light the
+    # button they were combined with.
+    ("MENU", (130, 66, 52, 16), [pygame.K_ESCAPE, pygame.K_BACKSPACE]),
+    ("SELECT", (100, 104, 52, 16), [pygame.K_SPACE, pygame.K_KP_MINUS]),
+    ("START", (160, 104, 52, 16), [pygame.K_RETURN, pygame.K_KP_PLUS]),
 ]
 
 
@@ -86,7 +95,6 @@ class App(object):
         self.big = pygame.font.Font(None, 22)
         self.down = set()           # currently held keys
         self.log = []               # recent events (text, colour)
-        self.lk_learned = {}        # "LK2" -> key code, assigned on the fly
         self.menu_down_at = None
         self.joy_buttons = set()
         self.joys = []
@@ -110,29 +118,14 @@ class App(object):
             self.logf.write(text + "\n")
             self.logf.flush()
 
-    def learn_lightkey(self, key):
-        """Unknown keys get assigned to the first free middle Lightkey slot
-        so the on-screen bar shows what each back button sends."""
-        if key in KNOWN or key in (pygame.K_LSHIFT, pygame.K_RSHIFT):
-            return
-        if key in self.lk_learned.values():
-            return
-        for slot in ("LK2", "LK3", "LK4"):
-            if slot not in self.lk_learned:
-                self.lk_learned[slot] = key
-                return
-
     def handle(self, ev):
         if ev.type == pygame.QUIT:
             self.running = False
         elif ev.type == pygame.KEYDOWN:
             self.down.add(ev.key)
-            self.learn_lightkey(ev.key)
             meaning = KNOWN.get(ev.key, "NEW")
-            mods = pygame.key.get_mods()
-            mod_txt = " +shift" if mods & pygame.KMOD_SHIFT else ""
-            self.add_log("DOWN %-8s code=%-4d %s%s" % (
-                key_label(ev.key), ev.key, meaning, mod_txt),
+            self.add_log("DOWN %-8s code=%-4d %s" % (
+                key_label(ev.key), ev.key, meaning),
                 ACCENT if meaning == "NEW" else TEXT)
             if ev.key == pygame.K_ESCAPE:
                 self.menu_down_at = pygame.time.get_ticks()
@@ -166,16 +159,11 @@ class App(object):
         self.screen.blit(surf, r)
 
     def draw_button(self, name, rect, keys):
-        if name in self.lk_learned:
-            keys = [self.lk_learned[name]]
         lit = any(k in self.down for k in keys)
         r = pygame.Rect(rect)
         pygame.draw.rect(self.screen, HOT if lit else PANEL, r)
         pygame.draw.rect(self.screen, ACCENT if lit else LINE, r, 1)
-        label = name
-        if name.startswith("LK"):
-            label = "%s %s" % (name, key_label(keys[0]) if keys else "?")
-        self.text(label, r.center, BG if lit else TEXT, center=True)
+        self.text(name, r.center, BG if lit else TEXT, center=True)
 
     def draw(self):
         s = self.screen
@@ -217,7 +205,7 @@ def main():
 
     shot = os.environ.get("KEYTESTER_SHOT")  # used to render the store shot
     if shot:
-        for k in (pygame.K_h, pygame.K_UP, pygame.K_k, pygame.K_y):
+        for k in (pygame.K_h, pygame.K_UP, pygame.K_k, pygame.K_KP_PLUS):
             app.handle(pygame.event.Event(pygame.KEYDOWN, key=k, mod=0))
         app.draw()
         pygame.image.save(screen, shot)
