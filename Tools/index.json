@@ -1,0 +1,10 @@
+{
+ "list": [
+  {
+   "type": "launcher",
+   "title": "KeyTester",
+   "file": "https://raw.githubusercontent.com/raxp122/ClockworkGameShell/master/Tools/KeyTester/file/KeyTester.tar.gz",
+   "shots": "https://raw.githubusercontent.com/raxp122/ClockworkGameShell/master/Tools/KeyTester/shots/KeyTester.png"
+  }
+ ]
+}
